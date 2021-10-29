@@ -1,0 +1,2 @@
+Test-Command: hexedit -h 2>&1 | grep '^usage'
+Restrictions: superficial

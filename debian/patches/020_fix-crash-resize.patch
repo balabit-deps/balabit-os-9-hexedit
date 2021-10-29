@@ -1,0 +1,76 @@
+Description: Move SIGWINCH handling from handler to NCURSES
+             Use NCURSES internal SIGWINCH handling to generate KEY_RESIZE.
+             Use KEY_RESIZE to trigger window resize instead of SIGWINCH.
+             .
+             This fixes a crash on some platforms during resize introduced
+             in b622084ac - it's not safe to allocate or reallocate memory
+             during a signal handler.
+Author: Richard Allen <rsaxvc@rsaxvc.net>
+Origin: https://github.com/pixel/hexedit/commit/783fc819623d0bb4c0159e873cf640e3552017ad
+Bug: https://github.com/pixel/hexedit/issues/51
+Bug-Ubuntu: https://launchpad.net/bugs/1931263
+Reviewed-By: Joao Eriberto Mota Filho <eriberto@debian.org>
+Last-Update: 2021-10-29
+Index: hexedit/display.c
+===================================================================
+--- hexedit.orig/display.c
++++ hexedit/display.c
+@@ -100,30 +100,12 @@ int computeCursorXPos(int cursor, int he
+ /*******************************************************************************/
+ /* Curses functions */
+ /*******************************************************************************/
+-static void handleSigWinch(int sig)
+-{
+-  /*Close and refresh window to get new size*/
+-  endwin();
+-  refresh();
+-
+-  /*Reset to trigger recalculation*/
+-  lineLength = 0;
+-
+-  clear();
+-  initDisplay();
+-  readFile();
+-  display();
+-}
+ 
+ void initCurses(void)
+ {
+   struct sigaction sa;
+   initscr();
+ 
+-  memset(&sa, 0, sizeof(struct sigaction));
+-  sa.sa_handler = handleSigWinch;
+-  sigaction(SIGWINCH, &sa, NULL);
+-
+ #ifdef HAVE_COLORS
+   if (colored) {
+     start_color();
+Index: hexedit/interact.c
+===================================================================
+--- hexedit.orig/interact.c
++++ hexedit/interact.c
+@@ -341,9 +341,21 @@ int key_to_function(int key)
+ 
+   switch (key)
+     {
+-    case ERR:
+     case KEY_RESIZE:
+-      /*no-op*/
++      /*Close and refresh window to get new size*/
++      endwin();
++      refresh();
++
++      /*Reset to trigger recalculation*/
++      lineLength = 0;
++
++      clear();
++      initDisplay();
++      readFile();
++      display();
++      break;
++
++    case ERR:
+       break;
+ 
+     case KEY_RIGHT:
